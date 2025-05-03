@@ -1,3 +1,5 @@
 venv/
 .env
 spimex_xls/
+__pycache__/
+.mypy_cache/
