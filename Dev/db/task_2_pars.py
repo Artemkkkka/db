@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 
 BASE_URL = "https://spimex.com/markets/oil_products/trades/results/"
 OUT_DIR = "spimex_xls"
-START_DATE = dt.date(2023, 1, 1)
+START_DATE = dt.date(2025, 4, 2)
 
 session = requests.Session()
 session.headers.update({
