@@ -71,7 +71,7 @@ class TradingResult(Base):
 engine = create_async_engine(
     ASYNC_DATABASE_URL,
     pool_pre_ping=True,
-    connect_args={"ssl": False},  # отключаем SSL на Windows
+    connect_args={"ssl": False},
 )
 AsyncSessionLocal = sessionmaker(
     bind=engine,
@@ -159,10 +159,7 @@ def prepare_df(path: str) -> pd.DataFrame:
     sheets = pd.read_excel(path, sheet_name=None, header=6, engine="xlrd")
     frames = []
     for df in sheets.values():
-        # 1) Нормализуем заголовки
         df.columns = df.columns.str.replace(r"\s+", " ", regex=True).str.strip()
-
-        # 2) Переименовываем колонки
         mapping = {
             "Код Инструмента": "exchange_product_id",
             "Наименование Инструмента": "exchange_product_name",
@@ -179,26 +176,18 @@ def prepare_df(path: str) -> pd.DataFrame:
             if pat in col
         }
         df = df.rename(columns=rename_map)
-
-        # 3) Обрежем дубли имён, чтобы df['total'] и df['volume'] были Series
         df = df.loc[:, ~df.columns.duplicated()]
-
-        # 4) Фильтруем по наличию ключевых колонок
         if 'exchange_product_id' not in df.columns or 'count' not in df.columns:
             continue
         df = df[df['exchange_product_id'].astype(str).str.match(r'^[A-Za-z0-9]')]
         if df.empty:
             continue
-
-        # 5) Очистка и конверсия count
         df['count'] = (
             df['count'].astype(str)
               .str.replace(r"\s+", "", regex=True)
               .str.replace(',', '.', regex=False)
         )
         df['count'] = pd.to_numeric(df['count'], errors='coerce').fillna(0).astype(int)
-
-        # 6) Очистка и конверсия volume (если есть)
         if 'volume' in df.columns:
             df['volume'] = (
                 df['volume'].astype(str)
@@ -206,8 +195,6 @@ def prepare_df(path: str) -> pd.DataFrame:
                    .str.replace(',', '.', regex=False)
             )
             df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
-
-        # 7) Очистка и конверсия total (если есть)
         if 'total' in df.columns:
             df['total'] = (
                 df['total'].astype(str)
@@ -215,17 +202,11 @@ def prepare_df(path: str) -> pd.DataFrame:
                    .str.replace(',', '.', regex=False)
             )
             df['total'] = pd.to_numeric(df['total'], errors='coerce')
-
-        # 8) Оставляем только сделки с count > 0
         df = df[df['count'] > 0]
         if df.empty:
             continue
-
-        # 9) Оставляем только переименованные колонки
         cols = list(rename_map.values())
         df = df[[c for c in cols if c in df.columns]]
-
-        # 10) Добавляем вспомогательные поля
         df['oil_id'] = df['exchange_product_id'].str[:4]
         df['delivery_basis_id'] = df['exchange_product_id'].str[4:7]
         df['delivery_type_id'] = df['exchange_product_id'].str[-1]
@@ -240,10 +221,8 @@ def prepare_df(path: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     result = pd.concat(frames, ignore_index=True)
-    # напоследок уберём дубли колонок, если что осталось
+
     return result.loc[:, ~result.columns.duplicated()]
-
-
 
 
 async def save_to_db():
@@ -251,7 +230,6 @@ async def save_to_db():
         glob.glob(os.path.join(OUT_DIR, '*.xls')) +
         glob.glob(os.path.join(OUT_DIR, '*.xlsx'))
     )
-    # список колонок точно в том же порядке, что и ваша таблица (без id)
     cols = [
         'exchange_product_id',
         'exchange_product_name',
