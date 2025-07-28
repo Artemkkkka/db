@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 
 BASE_URL = "https://spimex.com/markets/oil_products/trades/results/"
 OUT_DIR = "spimex_xls"
-START_DATE = dt.date(2025, 4, 2)
+START_DATE = dt.date(2025, 7, 15)
 
 session = requests.Session()
 session.headers.update({
@@ -66,7 +66,7 @@ def main():
                     print(f"[SKIP] {out_path} уже есть")
 
         if done_earlier:
-            print("Дошли до 2023-01-01")
+            print(f"Дошли до {START_DATE}")
             break
 
         next_url = f"https://spimex.com/markets/oil_products/trades/results/?page=page-{page_number + 1}"
