@@ -23,11 +23,11 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 
 
 load_dotenv()
-DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("POSTGRES_USER")
+DB_PASS = os.getenv("POSTGRES_PASSWORD")
+DB_NAME = os.getenv("POSTGRES_DB")
 DB_HOST = os.getenv("DB_HOST")
 DB_PORT = os.getenv("DB_PORT")
-DB_USER = os.getenv("DB_USER")
-DB_PASS = os.getenv("DB_PASS")
 
 BASE_URL = os.getenv(
     "SPIMEX_BASE_URL",
@@ -160,34 +160,41 @@ def prepare_df(path: str) -> pd.DataFrame:
     frames = []
     for df in sheets.values():
         df.columns = df.columns.str.replace(r"\s+", " ", regex=True).str.strip()
-        mapping = {
-            "Код Инструмента": "exchange_product_id",
-            "Наименование Инструмента": "exchange_product_name",
-            "Базис поставки": "delivery_basis_name",
-            "Объем Договоров в единицах измерения": "volume",
-            "Обьем Договоров": "total",
-            "Объем Договоров": "total",
-            "Количество Договоров": "count",
-        }
-        rename_map = {
-            col: new
-            for pat, new in mapping.items()
-            for col in df.columns
-            if pat in col
-        }
+
+        rename_map = {}
+        for col in df.columns:
+            if 'Код Инструмента' in col:
+                rename_map[col] = 'exchange_product_id'
+            elif 'Наименование Инструмента' in col:
+                rename_map[col] = 'exchange_product_name'
+            elif 'Базис поставки' in col:
+                rename_map[col] = 'delivery_basis_name'
+            elif 'Объем Договоров в единицах измерения' in col:
+                rename_map[col] = 'volume'
+            elif 'Обьем Договоров' in col or (
+                'Объем Договоров' in col and 'руб' in col.lower()
+            ):
+                rename_map[col] = 'total'
+            elif 'Количество Договоров' in col:
+                rename_map[col] = 'count'
+
         df = df.rename(columns=rename_map)
         df = df.loc[:, ~df.columns.duplicated()]
+
         if 'exchange_product_id' not in df.columns or 'count' not in df.columns:
             continue
+
         df = df[df['exchange_product_id'].astype(str).str.match(r'^[A-Za-z0-9]')]
         if df.empty:
             continue
+
         df['count'] = (
             df['count'].astype(str)
               .str.replace(r"\s+", "", regex=True)
               .str.replace(',', '.', regex=False)
         )
         df['count'] = pd.to_numeric(df['count'], errors='coerce').fillna(0).astype(int)
+
         if 'volume' in df.columns:
             df['volume'] = (
                 df['volume'].astype(str)
@@ -195,6 +202,7 @@ def prepare_df(path: str) -> pd.DataFrame:
                    .str.replace(',', '.', regex=False)
             )
             df['volume'] = pd.to_numeric(df['volume'], errors='coerce')
+
         if 'total' in df.columns:
             df['total'] = (
                 df['total'].astype(str)
@@ -202,15 +210,16 @@ def prepare_df(path: str) -> pd.DataFrame:
                    .str.replace(',', '.', regex=False)
             )
             df['total'] = pd.to_numeric(df['total'], errors='coerce')
+
         df = df[df['count'] > 0]
         if df.empty:
             continue
-        cols = list(rename_map.values())
-        df = df[[c for c in cols if c in df.columns]]
+
         df['oil_id'] = df['exchange_product_id'].str[:4]
         df['delivery_basis_id'] = df['exchange_product_id'].str[4:7]
         df['delivery_type_id'] = df['exchange_product_id'].str[-1]
         df['date'] = file_date
+
         now = pd.Timestamp.now(tz='UTC').tz_convert(None)
         df['created_on'] = now
         df['updated_on'] = now
@@ -221,7 +230,6 @@ def prepare_df(path: str) -> pd.DataFrame:
         return pd.DataFrame()
 
     result = pd.concat(frames, ignore_index=True)
-
     return result.loc[:, ~result.columns.duplicated()]
 
 
